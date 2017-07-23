@@ -35,9 +35,7 @@
            :body    (s/* any?)))
 
   (defn enforce-spec
-    "Conforms the value to the spec, or throws if it cannot do so.
-     Example:
-       `(enforce-spec ::my-spec my-value)`"
+    "Conforms the value to the spec, or throws if it cannot do so."
     [spec value]
     (s/assert spec value)
     (s/conform spec value)))
@@ -51,11 +49,11 @@
   `(core-macros/compile-time ~@body))
 
 (core-macros/compile-time
-  (defmacro cljs?
+  (defn cljs?
     "Returns `true` if compiled for cljs, `false` otherwise. Expects the `&env` hidden
      macro argument as its argument."
     [env]
-    `(boolean (:ns ~env)))
+    (boolean (:ns env)))
 
   #?(:cljs (require '[cljs.js :as cljs]
                     '[cljs.env :as env]))
