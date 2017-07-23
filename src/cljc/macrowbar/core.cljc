@@ -1,8 +1,6 @@
 (ns macrowbar.core
   #?(:clj (:refer-clojure :exclude [eval]))
   (:require [clojure.spec.alpha :as s]
-            [clojure.walk :as walk]
-            [clojure.pprint :as pprint]
             [macrowbar.core-macros :as core-macros])
   #?(:cljs (:require-macros macrowbar.core)))
 
