@@ -145,3 +145,9 @@ Example:
   (macro-context {:gen-syms [z] :eval-syms [y]}
     ...))
 ```
+
+## License
+
+Copyright © 2017 Viktor Magyari
+
+Distributed under the Eclipse Public License v1.0.
