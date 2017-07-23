@@ -124,4 +124,24 @@ Example:
 
 ---
 
-##### `(with-evaluated params & body)`
+##### `(macro-context params & body)`
+
+This macro combines the previous two (`with-gensyms` and `with-evaluated`) into one. `params` should be a map with optional keys `:gen-syms` and `:eval-syms`, each mapped to a vector of symbols.
+
+Example:
+
+```clojure
+;; instead of this
+(defmacro foo [x y]
+  (let [z  (gensym)
+        y' (gensym)]
+    `(let [~z  :cake
+           ~y' ~y]
+       ~(let [y y']
+          ...))))
+
+;; you can do this
+(defmacro foo [x y]
+  (macro-context {:gen-syms [z] :eval-syms [y]}
+    ...))
+```
