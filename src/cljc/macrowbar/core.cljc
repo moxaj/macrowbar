@@ -40,19 +40,19 @@
 
 ;; Public api
 
-(defmacro compile-time
+(defmacro compile-time-strict
   "In JVM ClojureScripts, it only emits the body at compile time. In other
    environments, it always emits."
   [& body]
+  `(core-macros/compile-time-strict ~@body))
+
+(defmacro compile-time
+  "Same as `compile-time`, but also emits if the `goog-define`'d `macrowbar.util/DEBUG`
+   is set to `true`."
+  [& body]
   `(core-macros/compile-time ~@body))
 
-(core-macros/compile-time
-  (defn cljs?
-    "Returns `true` if compiled for cljs, `false` otherwise. Expects the `&env` hidden
-     macro argument as its argument."
-    [env]
-    (boolean (:ns env)))
-
+(core-macros/compile-time-strict
   #?(:cljs (require '[cljs.js :as cljs]
                     '[cljs.env :as env]))
 
@@ -71,7 +71,14 @@
                       (if error
                         (throw (js/Error. (str error)))
                         (vreset! result value))))
-         @result)))
+         @result))))
+
+(core-macros/compile-time
+  (defn cljs?
+    "Returns `true` if compiled for cljs, `false` otherwise. Expects the `&env` hidden
+     macro argument as its argument."
+    [env]
+    (boolean (:ns env)))
 
   #?(:clj
      (defn try-loading-compiling-ns
@@ -111,8 +118,12 @@
   (defmacro macro-context
     "Macro helper function, the equivalent of `with-gensyms` + `with-evaluated`."
     [& args]
-    (let [{:keys [context body]}       (enforce-spec ::macro-context-args args)
-          {:keys [gen-syms eval-syms]} context]
-      `(with-evaluated ~(or eval-syms [])
-         (with-gensyms ~(or gen-syms [])
+    (let [{:keys [context body]}
+          (enforce-spec ::macro-context-args args)
+
+          {:keys [gen-syms eval-syms]
+           :or   {gen-syms [] eval-syms []}}
+          context]
+      `(with-evaluated ~eval-syms
+         (with-gensyms ~gen-syms
            ~@body)))))
