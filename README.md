@@ -11,7 +11,7 @@ All public functions reside in the `macrowbar.core` namespace.
 
 ---
 
-##### `(compile-time & body)`
+##### `(compile-time-strict & body)`
 
 Macro. Takes any number of expressions, and emits them depending on the environment:
 
@@ -19,6 +19,23 @@ Macro. Takes any number of expressions, and emits them depending on the environm
  - when in JVM ClojureScripts, in emits only if the namespace being currently compiled is a Clojure macro namespace
 
 Can be used to strip away all unnecessary compile-time code from JVM ClojureScript js output files.
+
+Example:
+
+```clojure
+(compile-time-strict
+  (defn foo [x]
+    (inc x))
+
+  (defmacro bar [x]
+    (foo x)))
+```
+
+---
+
+##### `(compile-time & body)`
+
+Same as `compile-time`, but also emits in JVM ClojureScript if `macrowbar.util/DEBUG` is set to `true` via `:closure-defines`.
 
 Example:
 
@@ -116,10 +133,10 @@ Example:
       ~huge-chunk-of-code
       ~huge-chunk-of-code))
 
-;; prints "nay" twice, the expanded code includes [1 2 3 ... 100]
+;; prints "nay" twice, the expanded code includes `(reduce + [1 2 3 ... 100])`
 ;; twice (results in exploded code size, painful in ClojureScript)
 (bar (do (println "nay") 1)
-     [1 2 3 ... 100]])
+     (reduce + [1 2 3 ... 100])])
 ```
 
 ---
