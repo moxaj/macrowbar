@@ -6,7 +6,7 @@
 
 ;; Specs
 
-(core-macros/compile-time
+(core-macros/emit :debug
   (s/def ::macro-args
     (s/cat :args-decl (s/and (s/coll-of simple-symbol? :kind vector?)
                              #(= % (distinct %)))
@@ -40,40 +40,33 @@
 
 ;; Public api
 
-(defmacro compile-time-strict
-  "In JVM ClojureScripts, it only emits the body at compile time. In other
-   environments, it always emits."
-  [& body]
-  `(core-macros/compile-time-strict ~@body))
+(defmacro emit
+  "In Clojure and self-hosted ClojureScript, it always emits the body. In JVM ClojureScript,
+   it only emits if the closure constant `macrowbar.util/DEBUG` is set and the `mode`
+   argument is `:debug`."
+  [mode & body]
+  `(core-macros/emit ~mode ~@body))
 
-(defmacro compile-time
-  "Same as `compile-time`, but also emits if the `goog-define`'d `macrowbar.util/DEBUG`
-   is set to `true`."
-  [& body]
-  `(core-macros/compile-time ~@body))
-
-(core-macros/compile-time-strict
-  #?(:cljs (require '[cljs.js :as cljs]
-                    '[cljs.env :as env]))
-
+(core-macros/emit :debug-self-hosted
   (defn eval
-    "Evaluates the expression."
+    "Evaluates the expression. Assumes that `cljs.js` and `cljs.env` are already loaded. Expected
+     to be used in a properly set up self-hosted environment (like Lumo or Planck)."
     [expr]
     #?(:clj
        (clojure.core/eval expr)
        :cljs
        (let [result (volatile! nil)]
-         (cljs/eval env/*compiler*
-                    expr
-                    {:ns      (.-name *ns*)
-                     :context :expr}
-                    (fn [{:keys [value error]}]
-                      (if error
-                        (throw (js/Error. (str error)))
-                        (vreset! result value))))
+         (cljs.js/eval cljs.env/*compiler*
+                       expr
+                       {:ns      (.-name *ns*)
+                        :context :expr}
+                       (fn [{:keys [value error]}]
+                         (if error
+                           (throw (js/Error. (str error)))
+                           (vreset! result value))))
          @result))))
 
-(core-macros/compile-time
+(core-macros/emit :debug
   (defn cljs?
     "Returns `true` if compiled for cljs, `false` otherwise. Expects the `&env` hidden
      macro argument as its argument."
