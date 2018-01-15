@@ -16,10 +16,15 @@
         :ensure-branch "master"
         :repo          "clojars"})
 
-(deftask deploy
-  "Installs the artifact into the local maven repo and pushes to clojars."
+(deftask local-deploy
+  "Installs the artifact into the local maven repository."
   []
   (comp (pom)
         (jar)
-        (install)
+        (install)))
+
+(deftask deploy
+  "Installs the artifact into the local maven repository and pushes to clojars."
+  []
+  (comp (local-deploy)
         (push)))
