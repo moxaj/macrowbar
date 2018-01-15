@@ -78,14 +78,6 @@
     [env]
     (boolean (:ns env)))
 
-  #?(:clj
-     (defn try-loading-compiling-ns
-       "Tries to load the compiling ns as a clojure namespace."
-       []
-       (try
-         (require (ns-name *ns*))
-         (catch Exception e))))
-
   (defmacro with-gensyms
     "Executes each expression of `body` in the context of each symbol in `syms`
      bound to a generated symbol."
