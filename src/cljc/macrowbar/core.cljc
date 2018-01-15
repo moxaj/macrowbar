@@ -60,16 +60,20 @@
     #?(:clj
        (clojure.core/eval expr)
        :cljs
-       (let [result (volatile! nil)]
-         (cljs.js/eval cljs.env/*compiler*
-                       expr
-                       {:ns      (.-name *ns*)
-                        :context :expr}
-                       (fn [{:keys [value error]}]
-                         (if error
-                           (throw (js/Error. (str error)))
-                           (vreset! result value))))
-         @result))))
+       (let [eval-var     (or (resolve 'cljs.js/eval)
+                              (throw (js/Error. "Could not resolve 'cljs.js/eval")))
+             compiler-var (or (resolve 'cljs.env/*compiler*)
+                              (throw (js/Error. "Could not resolve 'cljs.env/*compiler*")))]
+         (let [result (volatile! nil)]
+           (@eval-var @compiler-var
+                      expr
+                      {:ns      (.-name *ns*)
+                       :context :expr}
+                      (fn [{:keys [value error]}]
+                        (if error
+                          (throw (js/Error. (str error)))
+                          (vreset! result value))))
+           @result)))))
 
 (core-macros/emit :debug
   (defn cljs?
