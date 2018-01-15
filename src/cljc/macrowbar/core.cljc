@@ -32,11 +32,16 @@
     (s/cat :context (s/keys :opt-un [::gen-syms ::eval-syms])
            :body    (s/* any?)))
 
-  (defn enforce-spec
+  (defn ^:private enforce-spec
     "Conforms the value to the spec, or throws if it cannot do so."
     [spec value]
-    (s/assert spec value)
-    (s/conform spec value)))
+    (let [conformed-value (s/conform spec value)]
+      (when (= :clojure.spec.alpha/invalid conformed-value)
+        (let [explained-data (s/explain-data spec value)]
+          (throw (ex-info (str "Spec assertion failed:\n"
+                               (with-out-str (s/explain-out explained-data)))
+                          explained-data))))
+      conformed-value)))
 
 ;; Public api
 
