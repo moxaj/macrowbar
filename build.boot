@@ -8,7 +8,7 @@
 
 (task-options!
   pom  {:project     'moxaj/macrowbar
-        :version     "0.1.3"
+        :version     "0.2.0"
         :description "Portable clojure macro utility functions"
         :url         "http://github.com/moxaj/macrowbar"
         :license     {"Eclipse Public License" "http://www.eclipse.org/legal/epl-v10.html"}}
