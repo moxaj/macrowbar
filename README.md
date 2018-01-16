@@ -114,7 +114,7 @@ Example:
 
 Takes a vector of symbols and force evaluates each, then executes body.
 
-Can be used to prevent accidental multiple evaluation of side-effectful parameters.
+Can be used to prevent accidental multiple evaluation of side-effectful arguments.
 
 Example:
 
