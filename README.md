@@ -153,9 +153,9 @@ Example:
 
 ---
 
-##### `(macro-context params & body)`
+##### `(macro-context args & body)`
 
-This macro combines the previous two (`with-gensyms` and `with-evaluated`) into one. `params` should be a map with optional keys `:gen-syms` and `:eval-syms`, each mapped to a vector of symbols.
+This macro combines the previous two (`with-gensyms` and `with-evaluated`) into one. `args` should be a map with optional keys `:gen-syms` and `:eval-syms`, each mapped to a vector of symbols.
 
 Example:
 
