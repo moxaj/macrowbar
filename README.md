@@ -27,7 +27,7 @@ Example:
 (emit :debug-self-hosted
   (def n 1))
 
-;; Emitted in Clojure and self-hosted ClojureScript, also in JVM ClojureScript if DEBUG is set
+;; Emitted in Clojure and self-hosted ClojureScript, also in JVM ClojureScript if and only if DEBUG is set
 (emit :debug
   (def n 1))
 ```
