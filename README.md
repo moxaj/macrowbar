@@ -11,73 +11,79 @@ All public functions reside in the `macrowbar.core` namespace.
 
 ---
 
-##### `(compile-time-strict & body)`
+##### `(emit mode & body)`
 
-Macro. Takes any number of expressions, and emits them depending on the environment:
-
- - when in Clojure or self-hosted ClojureScript, it always emits
- - when in JVM ClojureScripts, in emits only if the namespace being currently compiled is a Clojure macro namespace
+Macro. In Clojure and self-hosted ClojureScript, it always emits the body. In JVM ClojureScript, it only emits if the closure constant `macrowbar.util/DEBUG` is set to `true` and the `mode` argument is equal to `:debug`.
 
 Can be used to strip away all unnecessary compile-time code from JVM ClojureScript js output files.
 
 Example:
 
 ```clojure
-(compile-time-strict
-  (defn foo [x]
-    (inc x))
+;; Emitted in all targets
+(def n 1)
 
-  (defmacro bar [x]
-    (foo x)))
-```
+;; Emitted in Clojure and self-hosted ClojureScript, but not in JVM ClojureScript
+(emit :debug-self-hosted
+  (def n 1))
 
----
-
-##### `(compile-time & body)`
-
-Same as `compile-time`, but also emits in JVM ClojureScript if `macrowbar.util/DEBUG` is set to `true` via `:closure-defines`.
-
-Example:
-
-```clojure
-(compile-time
-  (defn foo [x]
-    (inc x))
-
-  (defmacro bar [x]
-    (foo x)))
+;; Emitted in Clojure and self-hosted ClojureScript, also in JVM ClojureScript if DEBUG is set
+(emit :debug
+  (def n 1))
 ```
 
 ---
 
 ##### `(cljs? env)`
 
-This function expects a macros hidden `&env` parameter as the single argument, and returns `true` if the macro is being compiled as a ClojureScript macro (i.e. self-hosted).
+This function expects the hidden `&env` argument of a macro as the single argument, and returns `true` if that macro is being compiled as a ClojureScript macro (i.e. self-hosted).
 
 Example:
 
 ```clojure
-(defmacro foo []
+;; src/example/foo.cljc
+(ns example.foo
+  #?(:cljs (:require-macros example.foo)))
+
+(defmacro macro []
   (if (cljs? &env)
     :cljs
     :clj))
+
+;; src/example/bar.cljc
+(ns example.bar
+  (:require [example.foo :as foo]))
+
+(println (foo/macro))
+;; => prints :clj in Clojure and JVM ClojureScript, :cljs in self-hosted ClojureScript
 ```
 
 ---
 
 ##### `(eval expr)`
 
-Evaluates the expression. This function is expected to be used at compile-time, and has mostly the same semantics as in Clojure: closed over local bindings are not visible, and in self-hosted ClojureScript, functions / vars used should be defined in a separate compilation stage (i.e. in a namespace other than the one currently being compiled).
+Evaluates the expression. This function is expected to be used at compile-time, and has mostly the same semantics as in Clojure: local bindings in its lexical scope are not visible, and in self-hosted ClojureScript, functions / vars used should be defined in a separate compilation stage (i.e. in a namespace other than the one currently being compiled).
 
-Can be used to evaluate macro arguments which could be compile-time constants.
+Can be used to evaluate macro arguments (for whatever reason).
 
 Example:
 
 ```clojure
-(defmacro foo [x]
-  `(+ 1 ~(eval x)))
+;; src/example/foo.cljc
+(ns example.foo
+  #?(:cljs (:require-macros example.foo)))
 
-(foo (bar/baz))
+(def n 3)
+
+(defmacro macro [x]
+  `(+ ~@(repeat (eval x) 1)))
+
+;; src/example/bar.cljc
+(ns example.bar
+  (:require [example.foo :as foo]))
+
+(foo/macro `foo/n)
+;; => 3
 ```
 
 ---
@@ -89,15 +95,15 @@ Takes a vector of symbols and binds each to a generated symbol (via `gensym`), t
 Example:
 
 ```clojure
-;; instead of this
-(defmacro foo []
+;; instead of this ...
+(defmacro macro []
   (let [a (gensym)
         b (gensym)
-        c (vary-meta (gensym) assoc :tag 'long)] ;; preserves meta!
+        c (vary-meta (gensym) assoc :tag 'long)]
     ...))
 
-;; you can do this
-(defmacro foo []
+;; ... you can do this
+(defmacro macro []
   (with-gensyms [a b ^long c]
     ...))
 ```
@@ -113,30 +119,36 @@ Can be used to prevent accidental multiple evaluation of side-effectful paramete
 Example:
 
 ```clojure
-;; instead of this
-(defmacro foo [x y]
+;; src/example/foo.cljc
+(ns example.foo
+  #?(:cljs (:require-macros example.foo)))
+
+;; instead of this ...
+(defmacro macro-1 [x]
   (let [x' (gensym)]
     `(let [~x' ~x]
-       ;; at this point, you either keep using x' (inconvenient), or do the following
        ~(let [x x']
-          ...))))
+          `(+ ~x ~x)))))
 
-;; you can do this
-(defmacro foo [x y]
+;; ... you can do this
+(defmacro macro-2 [x]
   (with-evaluated [x]
-    ...)) ;; you can keep using x
+    `(+ ~x ~x)))
 
-;; to prevent this
-(defmacro bar [side-effectful-parameter huge-chunk-of-code]
-  `(+ ~side-effectful-parameter
-      ~side-effectful-parameter
-      ~huge-chunk-of-code
-      ~huge-chunk-of-code))
+;; src/example/bar.cljc
+(ns example.bar
+  (:require [example.foo :as foo]))
 
-;; prints "nay" twice, the expanded code includes `(reduce + [1 2 3 ... 100])`
-;; twice (results in exploded code size, painful in ClojureScript)
-(bar (do (println "nay") 1)
-     (reduce + [1 2 3 ... 100])])
+;; ლ( ¤ 益 ¤ )┐
+(foo/macro-1 (do (println "cake") 10))
+;; "cake"
+;; "cake"
+;; => 20
+
+;; ʕ༼◕  ౪  ◕✿༽ʔ
+(foo/macro-2 (do (println "cake") 10))
+;; "cake"
+;; => 20
 ```
 
 ---
@@ -148,18 +160,18 @@ This macro combines the previous two (`with-gensyms` and `with-evaluated`) into 
 Example:
 
 ```clojure
-;; instead of this
-(defmacro foo [x y]
-  (let [z  (gensym)
-        y' (gensym)]
-    `(let [~z  :cake
-           ~y' ~y]
-       ~(let [y y']
+;; instead of this ...
+(defmacro macro-1 [x]
+  (let [x' (gensym)
+        y  (gensym)]
+    `(let [~y  :cake
+           ~x' ~x]
+       ~(let [x x']
           ...))))
 
-;; you can do this
-(defmacro foo [x y]
-  (macro-context {:gen-syms [z] :eval-syms [y]}
+;; ... you can do this
+(defmacro macro-2 [x]
+  (macro-context {:gen-syms [y] :eval-syms [x]}
     ...))
 ```
 
