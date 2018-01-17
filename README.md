@@ -41,7 +41,6 @@ This function expects the hidden `&env` argument of a macro as the single argume
 Example:
 
 ```clojure
-;; src/example/foo.cljc
 (ns example.foo
   #?(:cljs (:require-macros example.foo)))
 
@@ -50,7 +49,6 @@ Example:
     :cljs
     :clj))
 
-;; src/example/bar.cljc
 (ns example.bar
   (:require [example.foo :as foo]))
 
@@ -69,7 +67,6 @@ Can be used to evaluate macro arguments (for whatever reason).
 Example:
 
 ```clojure
-;; src/example/foo.cljc
 (ns example.foo
   #?(:cljs (:require-macros example.foo)))
 
@@ -78,7 +75,6 @@ Example:
 (defmacro macro [x]
   `(+ ~@(repeat (eval x) 1)))
 
-;; src/example/bar.cljc
 (ns example.bar
   (:require [example.foo :as foo]))
 
@@ -95,14 +91,14 @@ Takes a vector of symbols and binds each to a generated symbol (via `gensym`), t
 Example:
 
 ```clojure
-;; instead of this ...
+;; ok, but verbose
 (defmacro macro []
   (let [a (gensym)
         b (gensym)
         c (vary-meta (gensym) assoc :tag 'long)]
     ...))
 
-;; ... you can do this
+;; better
 (defmacro macro []
   (with-gensyms [a b ^long c]
     ...))
@@ -119,23 +115,31 @@ Can be used to prevent accidental multiple evaluation of side-effectful argument
 Example:
 
 ```clojure
-;; src/example/foo.cljc
 (ns example.foo
   #?(:cljs (:require-macros example.foo)))
 
-;; instead of this ...
+;; bad, potential multiple evaluation
 (defmacro macro-1 [x]
+  `(+ ~x ~x))
+
+;; better, but a new binding has to be introduced
+(defmacro macro-2 [x]
+  (let [x' (gensym)]
+    `(let [~x' ~x]
+       (+ ~x' ~x'))))
+
+;; better, can reuse 'x', but verbose
+(defmacro macro-3 [x]
   (let [x' (gensym)]
     `(let [~x' ~x]
        ~(let [x x']
           `(+ ~x ~x)))))
 
-;; ... you can do this
-(defmacro macro-2 [x]
+;; better
+(defmacro macro-4 [x]
   (with-evaluated [x]
     `(+ ~x ~x)))
 
-;; src/example/bar.cljc
 (ns example.bar
   (:require [example.foo :as foo]))
 
@@ -146,7 +150,7 @@ Example:
 ;; => 20
 
 ;; ʕ༼◕  ౪  ◕✿༽ʔ
-(foo/macro-2 (do (println "cake") 10))
+(foo/macro-4 (do (println "cake") 10))
 ;; "cake"
 ;; => 20
 ```
@@ -160,7 +164,7 @@ This macro combines the previous two (`with-gensyms` and `with-evaluated`) into 
 Example:
 
 ```clojure
-;; instead of this ...
+;; bad
 (defmacro macro-1 [x]
   (let [x' (gensym)
         y  (gensym)]
@@ -169,7 +173,7 @@ Example:
        ~(let [x x']
           ...))))
 
-;; ... you can do this
+;; better
 (defmacro macro-2 [x]
   (macro-context {:gen-syms [y] :eval-syms [x]}
     ...))
