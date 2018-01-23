@@ -13,7 +13,7 @@ All public functions reside in the `macrowbar.core` namespace.
 
 ##### `(emit mode & body)`
 
-Macro. In Clojure and self-hosted ClojureScript, it always emits the body. In JVM ClojureScript, it only emits if the closure constant `macrowbar.util/DEBUG` is set to `true` and the `mode` argument is equal to `:debug`.
+Macro. In Clojure and self-hosted ClojureScript, it always emits the body. In JVM ClojureScript, it if and only if emits the closure constant `macrowbar.util/DEBUG` is set to `true` and the `mode` argument is equal to `:debug`.
 
 Can be used to strip away all unnecessary compile-time code from JVM ClojureScript js output files.
 
@@ -24,7 +24,7 @@ Example:
 (def n 1)
 
 ;; Emitted in Clojure and self-hosted ClojureScript, but not in JVM ClojureScript
-(emit :debug-self-hosted
+(emit :debug-self-hosted ; could actually be any keyword other than `:debug`
   (def n 1))
 
 ;; Emitted in Clojure and self-hosted ClojureScript, also in JVM ClojureScript if and only if DEBUG is set
@@ -84,51 +84,45 @@ Example:
 
 ---
 
-##### `(with-gensyms symbols & body)`
+##### `(with-syms syms & body)`
 
-Takes a vector of symbols and binds each to a generated symbol (via `gensym`), then executes each expression in `body`.
+Utility macro for macros, expected to be used at compile time. Takes a map with optional keys `:gen`, `:bind` and `:eval` - each mapped to a vector of simple symbols - and any number of expressions. For each symbol `x` mapped to:
 
-Example:
+- `:gen`, it generates a new symbol with the metadata of `x`, and binds it to `x`
+- `:bind`: it essentially evaluates `x` at the target runtime (hard to describe, see example)
+- `:eval`, it evaluates `x` at the target compile time.
+
+Having any duplicate symbols leads to undefined behaviour (GIGO).
+
+Example for `:gen`:
 
 ```clojure
 ;; ok, but verbose
 (defmacro macro []
   (let [a (gensym)
-        b (gensym)
-        c (vary-meta (gensym) assoc :tag 'long)]
+        b (vary-meta (gensym) assoc :tag 'long)]
     ...))
 
 ;; better
 (defmacro macro []
-  (with-gensyms [a b ^long c]
+  (with-syms {:gen [a ^long b]}
     ...))
 ```
 
----
-
-##### `(with-evaluated symbols & body)`
-
-Takes a vector of symbols and force evaluates each, then executes body.
-
-Can be used to prevent accidental multiple evaluation of side-effectful arguments.
-
-Example:
+Example for `:bind`:
 
 ```clojure
-(ns example.foo
-  #?(:cljs (:require-macros example.foo)))
-
-;; bad, potential multiple evaluation
+;; bad, potential undesired multiple evaluation
 (defmacro macro-1 [x]
   `(+ ~x ~x))
 
-;; better, but a new binding has to be introduced
+;; better, but a new binding has to be introduced, can't reuse `x`, verbose
 (defmacro macro-2 [x]
   (let [x' (gensym)]
     `(let [~x' ~x]
        (+ ~x' ~x'))))
 
-;; better, can reuse 'x', but verbose
+;; better, can reuse `x`, but still verbose
 (defmacro macro-3 [x]
   (let [x' (gensym)]
     `(let [~x' ~x]
@@ -137,45 +131,21 @@ Example:
 
 ;; better
 (defmacro macro-4 [x]
-  (with-evaluated [x]
+  (with-syms {:bind [x]}
     `(+ ~x ~x)))
-
-(ns example.bar
-  (:require [example.foo :as foo]))
-
-;; ლ( ¤ 益 ¤ )┐
-(foo/macro-1 (do (println "cake") 10))
-;; "cake"
-;; "cake"
-;; => 20
-
-;; ʕ༼◕  ౪  ◕✿༽ʔ
-(foo/macro-4 (do (println "cake") 10))
-;; "cake"
-;; => 20
 ```
 
----
-
-##### `(macro-context args & body)`
-
-This macro combines the previous two (`with-gensyms` and `with-evaluated`) into one. `args` should be a map with optional keys `:gen-syms` and `:eval-syms`, each mapped to a vector of symbols.
-
-Example:
+Example for `:eval`:
 
 ```clojure
-;; bad
-(defmacro macro-1 [x]
-  (let [x' (gensym)
-        y  (gensym)]
-    `(let [~y  :cake
-           ~x' ~x]
-       ~(let [x x']
-          ...))))
+;; ok, but verbose
+(defmacro macro [x]
+  (let [x (macrowbar.core/eval x)] ;; not `clojure.core/eval`!
+    ...))
 
 ;; better
-(defmacro macro-2 [x]
-  (macro-context {:gen-syms [y] :eval-syms [x]}
+(defmacro macro [x]
+  (with-syms {:eval [x]}
     ...))
 ```
 
