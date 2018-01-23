@@ -7,30 +7,18 @@
 ;; Specs
 
 (core-macros/emit :debug
-  (s/def ::macro-args
-    (s/cat :args-decl (s/and (s/coll-of simple-symbol? :kind vector?)
-                             #(= % (distinct %)))
-           :body      some?
-           :args      (s/* any?)))
-
   (s/def ::symbols
     (s/coll-of symbol? :kind vector?))
 
-  (s/def ::with-gensyms-args
-    (s/cat :syms ::symbols
-           :body (s/* any?)))
-
-  (s/def ::with-evaluated-args
-    (s/cat :syms ::symbols
-           :body (s/* any?)))
-
   (s/def ::gen-syms ::symbols)
+
+  (s/def ::bind-syms ::symbols)
 
   (s/def ::eval-syms ::symbols)
 
-  (s/def ::macro-context-args
-    (s/cat :context (s/keys :opt-un [::gen-syms ::eval-syms])
-           :body    (s/* any?)))
+  (s/def ::with-syms-args
+    (s/cat :syms (s/keys :opt-un [::gen-syms ::bind-syms ::eval-syms])
+           :body (s/* any?)))
 
   (defn ^:private enforce-spec
     "Conforms the value to the spec, or throws if it cannot do so."
@@ -47,8 +35,8 @@
 
 (defmacro emit
   "In Clojure and self-hosted ClojureScript, it always emits the body. In JVM ClojureScript,
-   it only emits if the closure constant `macrowbar.util/DEBUG` is set and the `mode`
-   argument is `:debug`."
+   it if and only if emits the closure constant `macrowbar.util/DEBUG` is set to `true` and
+   the `mode` argument is equal to `:debug`."
   [mode & body]
   `(core-macros/emit ~mode ~@body))
 
@@ -82,42 +70,42 @@
     [env]
     (boolean (:ns env)))
 
-  (defmacro with-gensyms
-    "Executes each expression of `body` in the context of each symbol in `syms`
-     bound to a generated symbol."
-    [& args]
-    (let [{:keys [syms body]} (enforce-spec ::with-gensyms-args args)]
-      `(let [~@(mapcat (fn [sym]
-                         (let [gensym-expr `(gensym ~(str sym "-"))]
-                           [sym (if-some [sym-meta (meta sym)]
-                                  `(vary-meta ~gensym-expr merge ~(meta sym))
-                                  gensym-expr)]))
-                       syms)]
-         ~@body)))
+  (defmulti ^:private with-syms-impl (fn [body [type syms]] type))
 
-  (defmacro with-evaluated
-    "Executes each expression of `body` in the context of each symbol in `syms`
-     bound to an **evaluated** value. Can be used to prevent accidental multiple
-     evaluation in macros."
-    [& args]
-    (let [{:keys [syms body]} (enforce-spec ::with-evaluated-args args)]
-      (let [sym-map (into {} (map (juxt identity gensym) syms))]
-        `(let [~@(mapcat (fn [[sym temp-sym]]
-                           [temp-sym `(gensym '~sym)])
-                         sym-map)]
-           `(let [~~@(mapcat reverse sym-map)]
-              ~(let [~@(mapcat identity sym-map)]
-                 ~@body))))))
+  (defmethod with-syms-impl :gen
+    [body [_ syms]]
+    `(let [~@(mapcat (fn [sym]
+                       [sym `(vary-meta (gensym ~(str sym "-")) merge ~(meta sym))])
+                     syms)]
+       ~body))
 
-  (defmacro macro-context
-    "Macro helper function, the equivalent of `with-gensyms` + `with-evaluated`."
-    [& args]
-    (let [{:keys [context body]}
-          (enforce-spec ::macro-context-args args)
+  (defmethod with-syms-impl :bind
+    [body [_ syms]]
+    (let [sym-map (into {} (map (juxt identity gensym) syms))]
+      `(let [~@(mapcat (fn [[sym temp-sym]]
+                         [temp-sym `(gensym '~sym)])
+                       sym-map)]
+         `(let [~~@(mapcat reverse sym-map)]
+            ~(let [~@(mapcat identity sym-map)]
+               ~body)))))
 
-          {:keys [gen-syms eval-syms]
-           :or   {gen-syms [] eval-syms []}}
-          context]
-      `(with-evaluated ~eval-syms
-         (with-gensyms ~gen-syms
-           ~@body)))))
+  (defmethod with-syms-impl :eval
+    [body [_ syms]]
+    `(let [~@(mapcat (fn [sym]
+                       [sym `(eval ~sym)])
+                     syms)]
+       ~body))
+
+  (defmacro with-syms
+    "Utility macro for macros, expected to be used at compile time. Takes a map with optional
+     keys `:gen`, `:bind` and `:eval` - each mapped to a vector of simple symbols - and any
+     number of expressions. For each symbol mapped to:
+      - `:gen`, it generates a new symbol
+      - `:bind`, it evaluates it at runtime
+      - `:eval`, it evaluates it at compile time.
+     See the GitHub readme for a precise explanation of each of these features."
+    [& args]
+    (let [{:keys [body syms]} (enforce-spec ::with-syms-args args)]
+      (reduce with-syms-impl
+              `(do ~@body)
+              syms))))

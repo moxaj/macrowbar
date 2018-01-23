@@ -4,8 +4,8 @@
 
 (defmacro emit
   "In Clojure and self-hosted ClojureScript, it always emits the body. In JVM ClojureScript,
-   it only emits if the closure constant `macrowbar.util/DEBUG` is set and the `mode`
-   argument is `:debug`."
+   it if and only if emits the closure constant `macrowbar.util/DEBUG` is set to `true` and
+   the `mode` argument is equal to `:debug`."
   [mode & body]
   #?(:clj  (if-not (:ns &env)
              ;; Clojure
