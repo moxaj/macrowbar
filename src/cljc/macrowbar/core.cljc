@@ -103,6 +103,7 @@
       - `:gen`, it generates a new symbol
       - `:bind`, it evaluates it at runtime
       - `:eval`, it evaluates it at compile time.
+     Finally, it evaluates each expression.
      See the GitHub readme for a precise explanation of each of these features."
     [& args]
     (let [{:keys [body syms]} (enforce-spec ::with-syms-args args)]
