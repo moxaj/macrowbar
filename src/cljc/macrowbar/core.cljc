@@ -64,7 +64,7 @@
            @result)))))
 
 (core-macros/emit :debug
-  (defn cljs?
+  (defn ^{:tag #?(:clj nil :cljs boolean)} cljs?
     "Returns `true` if compiled for cljs, `false` otherwise. Expects the `&env` hidden
      macro argument as its argument."
     [env]
