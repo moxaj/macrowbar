@@ -75,7 +75,7 @@
   (defmethod with-syms-impl :gen
     [body [_ syms]]
     `(let [~@(mapcat (fn [sym]
-                       [sym `(vary-meta (gensym ~(str sym "-")) merge ~(meta sym))])
+                       [sym `(vary-meta (gensym ~(str sym "-")) merge '~(meta sym))])
                      syms)]
        ~body))
 
