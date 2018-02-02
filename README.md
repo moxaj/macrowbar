@@ -1,5 +1,5 @@
-# macrowbar
-Portable clojure macro utility functions
+# macrowbar (WORK IN PROGRESS)
+A set of portable macro utility functions.
 
 ## Latest version
 
@@ -7,11 +7,31 @@ Portable clojure macro utility functions
 
 ## Overview
 
-All public functions reside in the `macrowbar.core` namespace.
+All public functions reside in the `macrowbar.core` namespace. In the scope of this document, consider this namespace implicitly loaded and aliased to `macrowbar`.
+
+Some examples below define and then immediately call macros; note that in self-hosted ClojureScript, this is only possible if the macro is defined in a different compilation stage (ie. namespace). Futhermore, if a macro were to resolve a symbol at compile time (via `eval` or `partial-eval`), then that symbol has to be in a different compilation stage than the one in which the macro was invoked. To illustrate:
+
+```clojure
+;; src/foo.cljc
+(ns foo
+  #?(:cljs [:require-macros foo]))
+
+(defmacro macro [x]
+  (macrowbar/eval x))
+
+;; src/bar.cljc
+(ns bar
+  (:require [foo]))
+
+(def y 10)
+
+;; Will not compile in self-hosted ClojureScript!
+(foo/macro y)
+```
 
 ---
 
-##### `(emit mode & body)`
+##### `(macrowbar/emit mode & body)`
 
 Macro. In Clojure and self-hosted ClojureScript, it always emits the body. In JVM ClojureScript, it if and only if emits the closure constant `macrowbar.util/DEBUG` is set to `true` and the `mode` argument is equal to `:debug`.
 
@@ -24,41 +44,35 @@ Example:
 (def n 1)
 
 ;; Emitted in Clojure and self-hosted ClojureScript, but not in JVM ClojureScript
-(emit :debug-self-hosted ; could actually be any keyword other than `:debug`
+(macrowbar/emit :debug-self-hosted ; could actually be any keyword other than `:debug`
   (def n 1))
 
 ;; Emitted in Clojure and self-hosted ClojureScript, also in JVM ClojureScript if and only if DEBUG is set
-(emit :debug
+(macrowbar/emit :debug
   (def n 1))
 ```
 
 ---
 
-##### `(cljs? env)`
+##### `(macrowbar/cljs? env)`
 
 This function expects the hidden `&env` argument of a macro as the single argument, and returns `true` if that macro is being compiled as a ClojureScript macro (i.e. self-hosted).
 
 Example:
 
 ```clojure
-(ns example.foo
-  #?(:cljs (:require-macros example.foo)))
-
 (defmacro macro []
-  (if (cljs? &env)
+  (if (macrowbar/cljs? &env)
     :cljs
     :clj))
 
-(ns example.bar
-  (:require [example.foo :as foo]))
-
-(println (foo/macro))
+(println (macro))
 ;; => prints :clj in Clojure and JVM ClojureScript, :cljs in self-hosted ClojureScript
 ```
 
 ---
 
-##### `(eval expr)`
+##### `(macrowbar/eval expr)`
 
 Evaluates the expression. This function is expected to be used at compile-time, and has mostly the same semantics as in Clojure: local bindings in its lexical scope are not visible, and in self-hosted ClojureScript, functions / vars used should be defined in a separate compilation stage (i.e. in a namespace other than the one currently being compiled).
 
@@ -67,30 +81,46 @@ Can be used to evaluate macro arguments (for whatever reason).
 Example:
 
 ```clojure
-(ns example.foo
-  #?(:cljs (:require-macros example.foo)))
-
 (def n 3)
 
 (defmacro macro [x]
-  `(+ ~@(repeat (eval x) 1)))
+  `(+ ~@(repeat (macrowbar/eval x) 1)))
 
-(ns example.bar
-  (:require [example.foo :as foo]))
+(macroexpand '(macro `n))
+;; => (clojure.core/+ 1 1 1)
 
-(foo/macro `foo/n)
+(macro `n)
 ;; => 3
 ```
 
 ---
 
-##### `(with-syms syms & body)`
+##### `(macrowbar/partial-eval expr)`
+
+Prewalks the given expression, and evaluates each subvalue marked with an `'eval` tag.
+
+Example:
+
+```clojure
+(defmacro macro [x]
+  `(+ ~@(repeat (macrowbar/partial-eval x) 1)))
+
+(macroexpand '(macro ^eval (+ 1 2)))
+;; => (clojure.core/+ 1 1 1)
+
+(macro ^eval (+ 1 2))
+;; => 3
+```
+
+---
+
+##### `(macrowbar/with-syms syms & body)`
 
 Utility macro for macros, expected to be used at compile time. Takes a map with optional keys `:gen`, `:bind` and `:eval` - each mapped to a vector of simple symbols - and any number of expressions. For each symbol `x` mapped to:
 
 - `:gen`, it generates a new symbol with the metadata of `x`, and binds it to `x`
 - `:bind`: it essentially evaluates `x` at the target runtime (hard to describe, see example)
-- `:eval`, it evaluates `x` at the target compile time.
+- `:eval`, it evaluates parts of `x` (those marked with `^eval`) at the target compile time.
 
 Having any duplicate symbols leads to undefined behaviour (GIGO).
 
@@ -105,7 +135,7 @@ Example for `:gen`:
 
 ;; better
 (defmacro macro []
-  (with-syms {:gen [a ^long b]}
+  (macrowbar/with-syms {:gen [a ^long b]}
     ...))
 ```
 
@@ -131,7 +161,7 @@ Example for `:bind`:
 
 ;; better
 (defmacro macro-4 [x]
-  (with-syms {:bind [x]}
+  (macrowbar/with-syms {:bind [x]}
     `(+ ~x ~x)))
 ```
 
@@ -140,12 +170,12 @@ Example for `:eval`:
 ```clojure
 ;; ok, but verbose
 (defmacro macro [x]
-  (let [x (macrowbar.core/eval x)] ;; not `clojure.core/eval`!
+  (let [x (macrowbar.core/partial-eval x)]
     ...))
 
 ;; better
 (defmacro macro [x]
-  (with-syms {:eval [x]}
+  (macrowbar/with-syms {:eval [x]}
     ...))
 ```
 
