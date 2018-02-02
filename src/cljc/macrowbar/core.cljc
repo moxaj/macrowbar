@@ -1,6 +1,7 @@
 (ns macrowbar.core
   #?(:clj (:refer-clojure :exclude [eval]))
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.walk :as walk]
+            [clojure.spec.alpha :as s]
             [macrowbar.core-macros :as core-macros])
   #?(:cljs (:require-macros macrowbar.core)))
 
@@ -70,6 +71,15 @@
     [env]
     (boolean (:ns env)))
 
+  (defn partial-eval
+    "Prewalks the given expression, and evaluates each subvalue marked with an `'eval` tag."
+    [expr]
+    (walk/prewalk (fn [expr']
+                    (cond-> expr'
+                      (= 'eval (:tag (meta expr')))
+                      (eval)))
+                  expr))
+
   (defmulti ^:private with-syms-impl (fn [body [type syms]] type))
 
   (defmethod with-syms-impl :gen
@@ -92,7 +102,7 @@
   (defmethod with-syms-impl :eval
     [body [_ syms]]
     `(let [~@(mapcat (fn [sym]
-                       [sym `(eval ~sym)])
+                       [sym `(partial-eval ~sym)])
                      syms)]
        ~body))
 
@@ -102,7 +112,7 @@
      number of expressions. For each symbol mapped to:
       - `:gen`, it generates a new symbol
       - `:bind`, it evaluates it at runtime
-      - `:eval`, it evaluates it at compile time.
+      - `:eval`, it evaluates parts of it (those marked with `^eval`) at compile time.
      Finally, it evaluates each expression.
      See the GitHub readme for a precise explanation of each of these features."
     [& args]
