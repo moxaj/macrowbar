@@ -47,7 +47,12 @@
      to be used in a properly set up self-hosted environment (like Lumo or Planck)."
     [expr]
     #?(:clj
-       (clojure.core/eval expr)
+       (do ;; TODO evaluate whether this is a good idea or not
+           (let [*ns*-name (ns-name *ns*)]
+             (when-not (contains? (loaded-libs) *ns*-name)
+               (try (require *ns*-name)
+                 (catch Exception _))))
+           (clojure.core/eval expr))
        :cljs
        (let [eval*    @(or (resolve 'cljs.js/eval)
                            (throw (js/Error. "Could not resolve 'cljs.js/eval")))
@@ -62,14 +67,7 @@
                     (if error
                       (throw (js/Error. (str error)))
                       (vreset! result value))))
-           @result)))))
-
-(core-macros/emit :debug
-  (defn ^{:tag #?(:clj nil :cljs boolean)} cljs?
-    "Returns `true` if compiled for cljs, `false` otherwise. Expects the `&env` hidden
-     macro argument as its argument."
-    [env]
-    (boolean (:ns env)))
+           @result))))
 
   (defn partial-eval
     "Prewalks the given expression, and evaluates each subvalue marked with an `'eval` tag."
@@ -78,7 +76,14 @@
                     (cond-> expr'
                       (= 'eval (:tag (meta expr')))
                       (eval)))
-                  expr))
+                  expr)))
+
+(core-macros/emit :debug
+  (defn ^{:tag #?(:clj nil :cljs boolean)} cljs?
+    "Returns `true` if compiled for cljs, `false` otherwise. Expects the `&env` hidden
+     macro argument as its argument."
+    [env]
+    (boolean (:ns env)))
 
   (defmulti ^:private with-syms-impl (fn [body [type syms]] type))
 
