@@ -72,29 +72,6 @@ Example:
 
 ---
 
-##### `(macrowbar/eval expr)`
-
-Evaluates the expression. This function is expected to be used at compile-time, and has mostly the same semantics as in Clojure: local bindings in its lexical scope are not visible, and in self-hosted ClojureScript, functions / vars used should be defined in a separate compilation stage (i.e. in a namespace other than the one currently being compiled).
-
-Can be used to evaluate macro arguments (for whatever reason).
-
-Example:
-
-```clojure
-(def n 3)
-
-(defmacro macro [x]
-  `(+ ~@(repeat (macrowbar/eval x) 1)))
-
-(macroexpand '(macro `n))
-;; => (clojure.core/+ 1 1 1)
-
-(macro `n)
-;; => 3
-```
-
----
-
 ##### `(macrowbar/partial-eval expr)`
 
 Prewalks the given expression, and evaluates each subvalue marked with an `'eval` tag.

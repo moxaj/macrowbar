@@ -1,5 +1,4 @@
 (ns macrowbar.core
-  #?(:clj (:refer-clojure :exclude [eval]))
   (:require [clojure.walk :as walk]
             [clojure.spec.alpha :as s]
             [macrowbar.core-macros :as core-macros])
@@ -42,33 +41,6 @@
   `(core-macros/emit ~mode ~@body))
 
 (core-macros/emit :debug-self-hosted
-  (defn eval
-    "Evaluates the expression. Assumes that `cljs.js` and `cljs.env` are already loaded. Expected
-     to be used in a properly set up self-hosted environment (like Lumo or Planck)."
-    [expr]
-    #?(:clj
-       (do ;; TODO evaluate whether this is a good idea or not
-           (let [*ns*-name (ns-name *ns*)]
-             (when-not (contains? (loaded-libs) *ns*-name)
-               (try (require *ns*-name)
-                 (catch Exception _))))
-           (clojure.core/eval expr))
-       :cljs
-       (let [eval*    @(or (resolve 'cljs.js/eval)
-                           (throw (js/Error. "Could not resolve 'cljs.js/eval")))
-             compiler @(or (resolve 'cljs.env/*compiler*)
-                           (throw (js/Error. "Could not resolve 'cljs.env/*compiler*")))]
-         (let [result (volatile! nil)]
-           (eval* compiler
-                  expr
-                  {:ns      (.-name *ns*)
-                   :context :expr}
-                  (fn [{:keys [value error]}]
-                    (if error
-                      (throw (js/Error. (str error)))
-                      (vreset! result value))))
-           @result))))
-
   (defn partial-eval
     "Prewalks the given expression, and evaluates each subvalue marked with an `'eval` tag."
     [expr]
